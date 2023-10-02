@@ -18,7 +18,7 @@ from typing import Optional
 class FileFragment:
     path: str
     start_pos: int
-    end_pos: int
+    length: int
     total_size: int
     mtime: time.struct_time
     hash_type: Optional[str] = None
