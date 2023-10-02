@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+service FileService {
+  rpc CheckFile(FileCheckRequest) returns (FileCheckResponse);
+  rpc UploadFile(FileUploadRequest) returns (FileUploadResponse);
+}
+
+message FileCheckRequest {
+  string path = 1;
+  string name = 2;
+  int64 total_size = 3;
+  int64 start_pos = 4;
+  int64 length = 5;
+  string hash = 6;
+  string hash_type = 7;
+  int64 mtime = 8; 
+  string compress_type = 9;
+}
+
+message FileCheckResponse {
+  bool exists = 1;
+}
+
+message FileUploadRequest {
+  string path = 1;
+  string name = 2;
+  int64 total_size = 3;
+  int64 start_pos = 4;
+  int64 length = 5;
+  string hash = 6;
+  string hash_type = 7;
+  int64 mtime = 8; 
+  string compress_type = 9;
+  bytes data = 10;
+
+}
+
+message FileUploadResponse {
+  bool success = 1;
+}
