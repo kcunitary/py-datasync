@@ -5,61 +5,17 @@ import logging
 
 logging.basicConfig(filename='server.log', level=logging.INFO)
 
-""" class MyTCPHandler(socketserver.BaseRequestHandler):
-    def handle(self):
-        chunks = {}
-        start_time = time.time()
-        while True:
-            header = self.request.recv(20)  # 8 bytes for start byte, 8 bytes for end byte and 4 bytes for filename length
-            if not header:
-                break
-            start_byte = int.from_bytes(header[:8], 'big')
-            end_byte = int.from_bytes(header[8:16], 'big')
-            filename_length = int.from_bytes(header[16:], 'big')
-            filename = self.request.recv(filename_length).decode()
-            compressed_chunk = self.request.recv(1024)
-            chunk = zlib.decompress(compressed_chunk)
-            if filename not in chunks:
-                chunks[filename] = {}
-            chunks[filename][(start_byte, end_byte)] = chunk
-            logging.info(f'Received bytes {start_byte} to {end_byte} of file {filename}')
 
-        for filename in chunks.keys():
-            with open(filename, 'wb') as f:
-                for (start_byte, end_byte) in sorted(chunks[filename].keys()):
-                    f.write(chunks[filename][(start_byte, end_byte)])
-        end_time = time.time()
-        logging.info(f'Finished receiving file {filename} in {end_time - start_time} seconds')
-
-def run_server(host, port):
-    with socketserver.ThreadingTCPServer((host, port), MyTCPHandler) as server:
-        server.serve_forever()
-
-# 使用方法：run_server('0.0.0.0', 12345)
-
-def init_local_data():
-    file_list = scan_dir()
-    local_file_info = process_files(file_list)
-#TO DO: dump load update
-    return local_file_info
-
-def handle_send_hash(data):
-    return data
-
-def handle_income_file(path,offset,data):
-    data = decompress(data)
-    writer.write(path,data)
-    checksum_all.update(data) """
-# 使用方法：scan_directory('你的目录路径')
-
-
-import grpc,threading
+import grpc,threading,pathlib
 from concurrent import futures
 import data_check_pb2
 import data_check_pb2_grpc
 import storge_cdc,local_storage_scan
 
+dst_path = "/opt/synctest"
 def gen_path(p):
+    path = pathlib.Path(p)
+    p = dst_path / path.parent /path.name
     return p
 class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
     def CheckFile(self, request, context):
@@ -114,5 +70,6 @@ if __name__ == '__main__':
     info_lock = threading.Lock()
     local_file_segment = storge_cdc.scan_directory(local_resource_dir)
     local_file_segment = {x.hash:x for x in local_file_segment}
-    print(len(local_file_segment))
+    logging.debug(f"local file segment:{local_file_segment.items()}")
+    logging.info(f"init local {len(local_file_segment)} file segments")
     serve()

@@ -14,7 +14,6 @@ message FileCheckRequest {
   string hash = 6;
   string hash_type = 7;
   int64 mtime = 8; 
-  string compress_type = 9;
 }
 
 message FileCheckResponse {

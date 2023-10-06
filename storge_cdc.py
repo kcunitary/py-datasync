@@ -25,5 +25,5 @@ def process_file(file_path):
     except Exception as e:
         print(f'Error processing file {file_path}: {e}')
 
-def scan_directory(dirpath):
-    return local_storage_scan.scan_directory(dirpath,process_file)
+def scan_directory(dirpath,fn=None):
+    return local_storage_scan.scan_directory(dirpath,process_file,fn)
