@@ -96,8 +96,8 @@ def update_results(filename,directory):
         print('No updates found.')
 
 # 使用方法：update_results('你的目录路径', '你的结果文件名')
-r = scan_directory("/opt/company-tomcat-app")
-save_results(r,"r.json")
+#r = scan_directory("/opt/company-tomcat-app")
+#save_results(r,"r.json")
 
 
 

@@ -37,16 +37,14 @@ def get_file_list(directory):
     return files
 
 def process_file_list(files,process_file):
-    pool = Pool(max(cpu_count()//4,2))
+    pool = Pool()
     results = pool.map(process_file, files)
     pool.close()
     pool.join()
     return [item for sublist in results if sublist for item in sublist]
 
-def scan_directory(directory,fn,filter_fn=None):
+def scan_directory(directory,fn):
     files = get_file_list(directory)
-    if filter_fn:
-        files = filter(filter_fn,files)
     return process_file_list(files,fn)
 
 def save_results(results, filename):
