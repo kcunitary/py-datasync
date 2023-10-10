@@ -4,17 +4,27 @@ import data_check_pb2_grpc
 import storge_cdc,local_storage_scan
 import hashlib,time
 import os,zlib,logging
-MAX_MESSAGE_LENGTH = 1024 * 1024 * 1024
-options = [
+from threading import  Lock
+from functools import partial
+from concurrent.futures import ThreadPoolExecutor
+import storge_rsync
+log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
+logging.basicConfig(filename='client.log',level=logging.DEBUG, format=log_formater)
+
+MAX_MESSAGE_LENGTH = 150 * 1024 * 1024
+""" rpc_options = [
+  #  ('grpc.max_message_length', MAX_MESSAGE_LENGTH),
+    ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
+    ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH)
+] """
+rpc_options = [
     ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
     ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH)
 ]
+server_addr = '[::]:50051'
+dir_to_send = "/tmp/testdata"
 
-log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
-logging.basicConfig(filename='client.log',level=logging.DEBUG, format=log_formater)
 def scan_dir_vhdx(dirs):
-    fn = None
-#    fn = lambda x:x.endswith("vhdx")
     return storge_cdc.scan_directory(dirs)
 
 def info_2_check_request(f):
@@ -48,12 +58,45 @@ def info_2_upload_request(f):
     )
     return r
 
-def run(d="/tmp/testdata"):
-    file_segment_list = scan_dir_vhdx(d)
-    logging.info(f"scan {len(file_segment_list)} file segments")
-    channel = grpc.insecure_channel('localhost:50051',options=options)
+def process_seg(seg,stub):
+        time_start = time.time()
+        request = info_2_check_request(seg)
+        logging.debug(f"request:{request}")
+#        with uploader_locker:
+        response = stub.CheckFile(request)
+        logging.debug(f"{seg.path} check response:{response}")
+        if response.exists:
+            logging.info("server has resource:succeed!")
+            pass
+        else:
+            request = info_2_upload_request(seg)
+            logging.debug(f"upload request:{request.path,request.length}")
+#            with uploader_locker:
+            response = stub.UploadFile(request)
+            logging.debug(f"upload response:{response.success}")
+        delta = time.time() - time_start
+        logging.info(f"transfer size:{seg.total_size} time:{delta}")
+def run():
+    channel = grpc.insecure_channel('127.0.0.1:50051',options=rpc_options)
     stub = data_check_pb2_grpc.FileServiceStub(channel)
+    
+    file_list = storge_rsync.get_file_list(dir_to_send)
+    process_seg_partial = partial(process_seg, stub=stub)
+    for file in file_list:
+        file_segments = storge_cdc.process_file(file)
+        for seg in file_segments:
+            process_seg_partial(seg)
+    
+
+    
+ 
+    """
+     with ThreadPoolExecutor(max_workers=4) as executor:
+        executor.map(process_seg_partial, file_segment_list)
+    """
+    """
     for seg in file_segment_list:
+        time_start = time.time()
         request = info_2_check_request(seg)
         logging.debug(f"request:{request}")
         response = stub.CheckFile(request)
@@ -66,9 +109,10 @@ def run(d="/tmp/testdata"):
             logging.debug(f"upload request:{request.path,request.length}")
             response = stub.UploadFile(request)
             logging.debug(f"upload response:{response.success}")
+        delta = time.time() - time_start
+        logging.info(f"transfer size:{seg.total_size} time:{delta}")
+    """
     channel.close()
-def test():
-    r = scan_dir_vhdx("/tmp/testdata/")
-    print(r)
+
 if __name__ == '__main__':
     run()
