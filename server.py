@@ -27,7 +27,15 @@ rpc_options = [
 local_resource_dir = "/opt/vmTransfer/dataTransfer/python/testdata/res"
 recive_dst_path = "/opt/vmTransfer/dataTransfer/python/testdata/dst"
 
-
+def check_and_update(path,pos,data,file_lock):
+    file = pathlib.Path(path)
+    if not file.exists():
+        file.touch()
+    with file_lock:
+        with open(path, 'r+b') as f:
+            f.seek(pos)
+            f.write(data)
+    return True
 
 def gen_path(raw_path):
     raw_path = pathlib.Path(raw_path)
@@ -45,7 +53,7 @@ class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
             logging.info(f"resource found in local:{result}")
             logging.debug(f"dest path:{newpath}")
             try:
-                with open(result.path,"rb") as f:
+                with open(result.path,"r+b") as f:
                     f.seek(result.start_pos)
                     data = f.read(result.length)
                 if not data:
@@ -53,10 +61,7 @@ class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
                 read_data_hash = hashlib.md5(data).hexdigest()
                 if read_data_hash != request.hash:
                     raise Exception(f"data changed:{read_data_hash}")
-                with file_lock:
-                    with open(newpath, 'wb') as f:
-                        f.seek(request.start_pos)
-                        f.write(data)
+                check_and_update(newpath,request.start_pos,data,file_lock)
                 return data_check_pb2.FileCheckResponse(exists=True)
             except Exception as err:
                 logging.error(f"local resoure err:{err}",exc_info=True)
@@ -71,11 +76,7 @@ class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
         decompressed_data = zlib.decompress(request.data)
         logging.debug(f"upload request:{request.path,request.length}")
         try:
-            with file_lock:
-                logging.debug(f"write path:{npath}")
-                with open(npath, 'wb') as f:
-                    f.seek(request.start_pos)
-                    f.write(decompressed_data)
+            check_and_update(npath,request.start_pos,decompressed_data,file_lock)
             with info_lock:
                 if request.hash not in local_file_segment:
                     local_file_segment[request.hash] = local_storage_scan.FileFragment(

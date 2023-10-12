@@ -76,18 +76,22 @@ def process_seg(seg,stub):
             logging.debug(f"upload response:{response.success}")
         delta = time.time() - time_start
         logging.info(f"transfer size:{seg.total_size} time:{delta}")
+
+    
 def run():
     channel = grpc.insecure_channel('127.0.0.1:50051',options=rpc_options)
     stub = data_check_pb2_grpc.FileServiceStub(channel)
     
-    file_list = storge_rsync.get_file_list(dir_to_send)
+#    file_list = storge_rsync.get_file_list(dir_to_send)
+    file_list = ["/mnt/nas-240/通用软件/镜像/win7 sp1 旗舰版 2020.05 x64.iso"]
     process_seg_partial = partial(process_seg, stub=stub)
     for file in file_list:
         file_segments = storge_cdc.process_file(file)
         for seg in file_segments:
             process_seg_partial(seg)
-    
-
+#        with ThreadPoolExecutor(max_workers=4) as executor:
+#            executor.map(process_seg_partial, file_segments)
+    channel.close()
     
  
     """
