@@ -1,4 +1,4 @@
-import zlib
+import lz4.frame
 import logging
 import grpc,threading,pathlib
 from concurrent import futures
@@ -9,7 +9,7 @@ import storge_cdc,local_storage_scan,hashlib
 
 #logging.basicConfig(filename='server.log', level=logging.INFO)
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
-logging.basicConfig(filename='server.log',level=logging.DEBUG, format=log_formater)
+logging.basicConfig(filename='logs/server.log',filemode="w",level=logging.DEBUG, format=log_formater)
 
 #conf
 server_addr = '[::]:50051'
@@ -73,7 +73,8 @@ class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
 
     def UploadFile(self, request, context):
         npath = gen_path(request.path)
-        decompressed_data = zlib.decompress(request.data)
+#        decompressed_data = zlib.decompress(request.data)
+        decompressed_data = lz4.frame.decompress(request.data)
         logging.debug(f"upload request:{request.path,request.length}")
         try:
             check_and_update(npath,request.start_pos,decompressed_data,file_lock)
