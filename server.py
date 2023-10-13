@@ -24,8 +24,8 @@ rpc_options = [
     ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
     ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH)
 ]
-local_resource_dir = "/opt/vmTransfer/dataTransfer/python/testdata/res"
-recive_dst_path = "/opt/vmTransfer/dataTransfer/python/testdata/dst"
+local_resource_dir = "/opt/vmTransfer/dataTransfer/python/py-datasync/test/data/res"
+recive_dst_path = "/opt/vmTransfer/dataTransfer/python/py-datasync/test/data/dst"
 
 def check_and_update(path,pos,data,file_lock):
     file = pathlib.Path(path)
