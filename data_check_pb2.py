@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x64\x61ta-check.proto\"\xac\x01\n\x10\x46ileCheckRequest\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x12\n\ntotal_size\x18\x03 \x01(\x03\x12\x11\n\tstart_pos\x18\x04 \x01(\x03\x12\x0e\n\x06length\x18\x05 \x01(\x03\x12\x0c\n\x04hash\x18\x06 \x01(\t\x12\x11\n\thash_type\x18\x07 \x01(\t\x12\r\n\x05mtime\x18\x08 \x01(\x03\x12\x15\n\rcompress_type\x18\t \x01(\t\"#\n\x11\x46ileCheckResponse\x12\x0e\n\x06\x65xists\x18\x01 \x01(\x08\"\xbb\x01\n\x11\x46ileUploadRequest\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x12\n\ntotal_size\x18\x03 \x01(\x03\x12\x11\n\tstart_pos\x18\x04 \x01(\x03\x12\x0e\n\x06length\x18\x05 \x01(\x03\x12\x0c\n\x04hash\x18\x06 \x01(\t\x12\x11\n\thash_type\x18\x07 \x01(\t\x12\r\n\x05mtime\x18\x08 \x01(\x03\x12\x15\n\rcompress_type\x18\t \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\n \x01(\x0c\"%\n\x12\x46ileUploadResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32x\n\x0b\x46ileService\x12\x32\n\tCheckFile\x12\x11.FileCheckRequest\x1a\x12.FileCheckResponse\x12\x35\n\nUploadFile\x12\x12.FileUploadRequest\x1a\x13.FileUploadResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x64\x61ta-check.proto\"\x95\x01\n\x10\x46ileCheckRequest\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x12\n\ntotal_size\x18\x03 \x01(\x03\x12\x11\n\tstart_pos\x18\x04 \x01(\x03\x12\x0e\n\x06length\x18\x05 \x01(\x03\x12\x0c\n\x04hash\x18\x06 \x01(\t\x12\x11\n\thash_type\x18\x07 \x01(\t\x12\r\n\x05mtime\x18\x08 \x01(\x03\"&\n\x11\x46ileCheckResponse\x12\x11\n\tupload_id\x18\x01 \x01(\x03\"\xbb\x01\n\x11\x46ileUploadRequest\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x12\n\ntotal_size\x18\x03 \x01(\x03\x12\x11\n\tstart_pos\x18\x04 \x01(\x03\x12\x0e\n\x06length\x18\x05 \x01(\x03\x12\x0c\n\x04hash\x18\x06 \x01(\t\x12\x11\n\thash_type\x18\x07 \x01(\t\x12\r\n\x05mtime\x18\x08 \x01(\x03\x12\x15\n\rcompress_type\x18\t \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\n \x01(\x0c\"%\n\x12\x46ileUploadResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32x\n\x0b\x46ileService\x12\x32\n\tCheckFile\x12\x11.FileCheckRequest\x1a\x12.FileCheckResponse\x12\x35\n\nUploadFile\x12\x12.FileUploadRequest\x1a\x13.FileUploadResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -21,13 +21,13 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'data_check_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
   _globals['_FILECHECKREQUEST']._serialized_start=21
-  _globals['_FILECHECKREQUEST']._serialized_end=193
-  _globals['_FILECHECKRESPONSE']._serialized_start=195
-  _globals['_FILECHECKRESPONSE']._serialized_end=230
-  _globals['_FILEUPLOADREQUEST']._serialized_start=233
-  _globals['_FILEUPLOADREQUEST']._serialized_end=420
-  _globals['_FILEUPLOADRESPONSE']._serialized_start=422
-  _globals['_FILEUPLOADRESPONSE']._serialized_end=459
-  _globals['_FILESERVICE']._serialized_start=461
-  _globals['_FILESERVICE']._serialized_end=581
+  _globals['_FILECHECKREQUEST']._serialized_end=170
+  _globals['_FILECHECKRESPONSE']._serialized_start=172
+  _globals['_FILECHECKRESPONSE']._serialized_end=210
+  _globals['_FILEUPLOADREQUEST']._serialized_start=213
+  _globals['_FILEUPLOADREQUEST']._serialized_end=400
+  _globals['_FILEUPLOADRESPONSE']._serialized_start=402
+  _globals['_FILEUPLOADRESPONSE']._serialized_end=439
+  _globals['_FILESERVICE']._serialized_start=441
+  _globals['_FILESERVICE']._serialized_end=561
 # @@protoc_insertion_point(module_scope)

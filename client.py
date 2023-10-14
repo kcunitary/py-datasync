@@ -2,7 +2,7 @@ import grpc
 import data_check_pb2
 import data_check_pb2_grpc
 import storge_cdc,local_storage_scan
-import time
+import time,socket
 import os,logging
 import lz4.frame
 from functools import partial
@@ -22,8 +22,9 @@ rpc_options = [
 ]
 server_addr = '[::]:50051'
 dir_to_send = "/tmp/testdata"
-
-
+chunk_size = 64 *1024*1024
+tcp_port = 50052
+tcp_addr = "127.0.0.1"
 def sizeof_fmt(num, suffix="B"):
     for unit in ("", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"):
         if abs(num) < 1024.0:
@@ -86,7 +87,19 @@ def process_seg(seg,stub):
         delta = time.time() - time_start
         logging.info(f"transfer size:{sizeof_fmt(seg.length)} time:{delta}")
 
-
+def tcp_upload(ip,port,id,filename,offset,length):
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((ip, port))
+    with open(filename, 'rb') as f:
+        f.seek(offset)
+        chunk = f.read(length)
+        compressed_chunk = lz4.frame.compress(chunk,block_size=lz4.frame.BLOCKSIZE_MAX4MB)
+        header  = id.to_bytes(4, 'big')
+        s_1 = client_socket.sendall(header)
+        s_2 = client_socket.sendall(compressed_chunk)
+    client_socket.close()
+    return any([s_1,s_2])
+    
 def process_seg_per_client(seg,addr):
     time_start = time.time()
     channel = grpc.insecure_channel(addr,options=rpc_options)
@@ -95,16 +108,14 @@ def process_seg_per_client(seg,addr):
     logging.debug(f"{seg.path}:{seg.start_pos}-{sizeof_fmt(seg.length)} check prepared")
     response = stub.CheckFile(request)
     logging.debug(f"{seg.path}:{seg.start_pos}-{sizeof_fmt(seg.length)} check response:{response}")
-    if response.exists:
+    if response.upload_id == 0:
         logging.info(f"{seg.path}:{seg.start_pos}-{sizeof_fmt(seg.length)} server has resource:succeed!")
         pass
     else:
-        request = info_2_upload_request(seg)
-        logging.debug(f"{seg.path}:{seg.start_pos}-{sizeof_fmt(seg.length)} upload prepared")
-        response = stub.UploadFile(request)
-        logging.debug(f"{seg.path}:{seg.start_pos}-{sizeof_fmt(seg.length)} upload response:{response.success}")
+        upload_bytes = tcp_upload(tcp_addr,tcp_port,response.upload_id,seg.path,seg.start_pos,seg.length)
+        logging.debug(f"{seg.path}:{seg.start_pos}-{sizeof_fmt(seg.length)} upload {upload_bytes}")
     delta = time.time() - time_start
-    logging.info(f"transfer size:{sizeof_fmt(seg.length)} time:{delta}")
+    logging.info(f"transfer size:{sizeof_fmt(seg.length)} time:{delta} speed:{sizeof_fmt(seg.length/delta)}/s")
 def process_file(path):
     file_segments = storge_cdc.process_file(path)
     process_seg_partial = partial(process_seg_per_client, addr=server_addr)

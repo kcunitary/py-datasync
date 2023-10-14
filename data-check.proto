@@ -17,7 +17,7 @@ message FileCheckRequest {
 }
 
 message FileCheckResponse {
-  bool exists = 1;
+  int64 upload_id = 1;
 }
 
 message FileUploadRequest {
