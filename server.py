@@ -1,4 +1,4 @@
-import lz4.frame
+import lz4.frame,zstd
 import logging
 import grpc,threading,pathlib
 from concurrent import futures
@@ -6,6 +6,7 @@ import data_check_pb2
 import data_check_pb2_grpc
 import storge_cdc,local_storage_scan,hashlib
 import socketserver
+import multiprocessing
 
 #logging.basicConfig(filename='server.log', level=logging.INFO)
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
@@ -118,25 +119,24 @@ def grpc_server(server_addr):
 class MyTCPHandler(socketserver.BaseRequestHandler):
     def handle(self):
         try:
-            header = self.request.recv(4)
-            id = int.from_bytes(header[:4], 'big')
+            data = b''
+            while True:
+                packet = self.request.recv(MAX_MESSAGE_LENGTH)
+                if not packet:
+                    break
+                data += packet
+            id = int.from_bytes(data[:4], 'big')
             with upload_info_lock:
                 seg_upload_info = upload_info.get(id,None)
             if seg_upload_info:
-                data = b''
-                while True:
-                    packet = self.request.recv(MAX_MESSAGE_LENGTH)
-                    if not packet:
-                        break
-                    data += packet
-                decompressed_data = lz4.frame.decompress(data)
+                decompressed_data = zstd.decompress(data[4:])
                 npath = gen_path(seg_upload_info.path)
                 check_and_update(npath,seg_upload_info.start_pos,decompressed_data,file_lock)
         except Exception as err:
-            logging.error("upload failed:"+ seg_upload_info,exc_info=True)
+            logging.error(f"upload failed:{id}" ,exc_info=True)
 
 def tcp_server(server_port):
-    with socketserver.ThreadingTCPServer(("0.0.0.0", server_port), MyTCPHandler) as server:
+    with socketserver.ForkingTCPServer(("0.0.0.0", server_port), MyTCPHandler) as server:
         server.serve_forever()
 
 
@@ -148,11 +148,11 @@ class threading_global_data:
 
 if __name__ == '__main__':
     #TO DO:each file lock
-    file_lock = threading.Lock()
+    file_lock = multiprocessing.Lock()
     #info lock
     info_lock = threading.Lock()
     #
-    upload_info_lock = threading.Lock()
+    upload_info_lock = multiprocessing.Lock()
     upload_id_lock = threading.Lock()
     upload_info = {}
     upload_id = 0

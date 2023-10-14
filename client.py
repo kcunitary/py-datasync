@@ -4,7 +4,7 @@ import data_check_pb2_grpc
 import storge_cdc,local_storage_scan
 import time,socket
 import os,logging
-import lz4.frame
+import lz4.frame,zstd
 from functools import partial
 import multiprocessing
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
@@ -63,7 +63,7 @@ def info_2_upload_request(f):
     hash =f.hash,
     hash_type = f.hash_type,
     mtime = int(f.mtime),
-    compress_type = "lz4",
+    compress_type = "zstd",
     data = data_compress
     )
     return r
@@ -88,16 +88,19 @@ def process_seg(seg,stub):
         logging.info(f"transfer size:{sizeof_fmt(seg.length)} time:{delta}")
 
 def tcp_upload(ip,port,id,filename,offset,length):
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((ip, port))
+    logging.debug(f"start upload:{filename}-{offset}-{length}")
     with open(filename, 'rb') as f:
         f.seek(offset)
         chunk = f.read(length)
-        compressed_chunk = lz4.frame.compress(chunk,block_size=lz4.frame.BLOCKSIZE_MAX4MB)
-        header  = id.to_bytes(4, 'big')
-        s_1 = client_socket.sendall(header)
-        s_2 = client_socket.sendall(compressed_chunk)
-    client_socket.close()
+    compressed_chunk = zstd.compress(chunk,1)
+    header  = id.to_bytes(4, 'big')
+    logging.debug(f"read finished:{filename}-{offset}-{length}")
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((ip, port))
+        s_1 = s.sendall(header)
+        s_2 = s.sendall(compressed_chunk)
+    logging.debug(f"transfer finshed:{filename}-{offset}-{length}")
     return any([s_1,s_2])
     
 def process_seg_per_client(seg,addr):
