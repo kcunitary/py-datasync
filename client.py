@@ -25,6 +25,9 @@ dir_to_send = "/tmp/testdata"
 chunk_size = 64 *1024*1024
 tcp_port = 50052
 tcp_addr = "127.0.0.1"
+
+file_list = ["/opt/vmTransfer/dataTransfer/python/py-datasync/test/data/test-img/win7 sp1 旗舰版 2020.05 x64.iso"]
+
 def sizeof_fmt(num, suffix="B"):
     for unit in ("", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"):
         if abs(num) < 1024.0:
@@ -119,17 +122,44 @@ def process_seg_per_client(seg,addr):
         logging.debug(f"{seg.path}:{seg.start_pos}-{sizeof_fmt(seg.length)} upload {upload_bytes}")
     delta = time.time() - time_start
     logging.info(f"transfer size:{sizeof_fmt(seg.length)} time:{delta} speed:{sizeof_fmt(seg.length/delta)}/s")
-def process_file(path):
+
+def gen_check_request(seg):
+    pass
+
+def gen_upload_request(seg):
+    pass
+
+def segment_process(seg,client):
+    check_request = gen_check_request(seg)
+    check_result = client.check(check_request)
+    if check_result.exist:
+        pass
+    else:
+        upload_request = gen_upload_request(check_result,seg)
+        client.upload(upload_request)
+def process_file(path,spliter,client):
     file_segments = storge_cdc.process_file(path)
+#   split file
+    file_segments = spliter.process(path)
+#   init uploader
+    client = client()
+#   segment excutor
     process_seg_partial = partial(process_seg_per_client, addr=server_addr)
-    seg_pool = multiprocessing.Pool()
+    seg_pool = multiprocessing.Pool(MAX_UPLOAD_SEGMENGT)
     return seg_pool.map(process_seg_partial,file_segments)
 
+def get_file_list():
+    return ["/opt/vmTransfer/dataTransfer/python/py-datasync/test/data/test-img/win7 sp1 旗舰版 2020.05 x64.iso"]
+
+MAX_UPLOAD_FILES = 2
+MAX_UPLOAD_SEGMENGT = 4
+
 def run():
-#    file_list = storge_rsync.get_file_list(dir_to_send)
-    file_list = ["/opt/vmTransfer/dataTransfer/python/py-datasync/test/data/test-img/win7 sp1 旗舰版 2020.05 x64.iso"]
-    for f in file_list:
-        process_file(f)
+    file_list = get_file_list()
+    logging.debug(f"upload file list:{file_list}")
+    file_pool = multiprocessing.Pool(MAX_UPLOAD_FILES)
+    file_pool.map(process_file,file_list)
+    logging.debug(f"Done!")
 
 
 

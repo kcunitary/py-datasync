@@ -21,6 +21,7 @@ class FileFragment:
     length: int
     total_size: int
     mtime: time.struct_time
+    data: Optional[bytes] = None
     hash_type: Optional[str] = None
     hash: Optional[str] = None
 

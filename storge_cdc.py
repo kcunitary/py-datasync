@@ -5,25 +5,31 @@ import hashlib,os
 import local_storage_scan as local_storage_scan
 def process_file(file_path):
     try:
-        seg_results = fastcdc.fastcdc(file_path,min_size=64*1024*1024, avg_size=100*1024*1024, max_size=800*1024*1024, fat=True, hf=hashlib.md5)
-        all = []
+        seg_results = fastcdc.fastcdc(file_path,avg_size=128*1024*1024, fat=True, hf=hashlib.md5)
         for result in seg_results:
-            end = result.offset +  result.length
             size = os.path.getsize(file_path)
-
-            item = local_storage_scan.FileFragment(
+            yield local_storage_scan.FileFragment(
                 path = file_path,
                 start_pos = result.offset,
                 length = result.length,
                 total_size=size,
-                mtime = os.path.getmtime(file_path),
+                mtime = int(os.path.getmtime(file_path)),
                 hash = result.hash,
-                hash_type =  "md5"
+                hash_type =  "md5",
+                data = result.data
             )
-            all.append(item)
-        return all
     except Exception as e:
         logging.error(f'Error processing file {file_path}: {e}',exc_info=True)
 
+def process_file_list(dir):
+    return list(process_file(dir))
 def scan_directory(dirpath):
-    return local_storage_scan.scan_directory(dirpath,process_file)
+    return local_storage_scan.scan_directory(dirpath,process_file_list)
+
+
+if __name__ == "__main__":
+    seg_results = fastcdc.fastcdc("/opt/vmTransfer/dataTransfer/python/py-datasync/test/data/test-img/win7 sp1 旗舰版 2020.05 x64.iso",min_size=64*1024*1024, avg_size=100*1024*1024, max_size=800*1024*1024, fat=True, hf=hashlib.md5)
+    seg_results = list(seg_results)
+    print(len(seg_results[0].data))
+    
+    print(type(seg_results[0].data))

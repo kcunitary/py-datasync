@@ -7,7 +7,8 @@ import data_check_pb2_grpc
 import storge_cdc,local_storage_scan,hashlib
 import socketserver
 import multiprocessing
-
+import transform_data_class
+import pickle
 #logging.basicConfig(filename='server.log', level=logging.INFO)
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
 logging.basicConfig(filename='logs/server.log',filemode="w",level=logging.DEBUG, format=log_formater)
@@ -68,7 +69,7 @@ class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
                 if read_data_hash != request.hash:
                     raise Exception(f"data changed:{read_data_hash}")
                 check_and_update(newpath,request.start_pos,data,file_lock)
-                return data_check_pb2.FileCheckResponse(upload_id = 0)
+                return data_check_pb2.FileCheckResponse(exist=True,upload_id = 0)
             except Exception as err:
                 logging.error(f"local resoure err:{err}",exc_info=True)
                 with upload_id_lock:
@@ -76,14 +77,14 @@ class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
                         upload_id = upload_id + 1 
                         now_upload_id = upload_id
                         upload_info[upload_id] = request
-                return data_check_pb2.FileCheckResponse(upload_id=now_upload_id)
+                return data_check_pb2.FileCheckResponse(exist=False,upload_id=now_upload_id)
         else:
             with upload_id_lock:
                 with upload_info_lock:
                     upload_id = upload_id + 1 
                     now_upload_id = upload_id
                     upload_info[upload_id] = request
-            return data_check_pb2.FileCheckResponse(upload_id=now_upload_id)
+            return data_check_pb2.FileCheckResponse(exist=False,upload_id=now_upload_id)
 
         
 
@@ -118,23 +119,42 @@ def grpc_server(server_addr):
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
     def handle(self):
+        id  = 0
+        data = b""
         try:
-            data = b''
+            packet = self.request.recv(8)
+            id = int.from_bytes(packet[:4], 'big')
+            length = int.from_bytes(packet[4:], 'big')
+            logging.debug(f"header id:{id} len:{length}")
             while True:
                 packet = self.request.recv(MAX_MESSAGE_LENGTH)
                 if not packet:
                     break
                 data += packet
-            id = int.from_bytes(data[:4], 'big')
+                if len(data) == length:
+                    break
+            
             with upload_info_lock:
                 seg_upload_info = upload_info.get(id,None)
             if seg_upload_info:
-                decompressed_data = zstd.decompress(data[4:])
+                decompressed_data = data
+                #decompressed_data = zstd.decompress(data[4:])
                 npath = gen_path(seg_upload_info.path)
                 check_and_update(npath,seg_upload_info.start_pos,decompressed_data,file_lock)
+                response = transform_data_class.upload_response(id=id,success=True)
+                response = pickle.dumps(response)
+                self.request.sendall(response)
+            else:
+                raise Exception(f"upload info not found{id}")
+            
         except Exception as err:
             logging.error(f"upload failed:{id}" ,exc_info=True)
-
+            try:
+                response = transform_data_class.upload_response(id,False)
+                response = pickle.dumps(response)
+                self.request.sendall(response)
+            except Exception as err:
+                logging.error(f"upload send error failed:{err}",exc_info=True)
 def tcp_server(server_port):
     with socketserver.ForkingTCPServer(("0.0.0.0", server_port), MyTCPHandler) as server:
         server.serve_forever()
