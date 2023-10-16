@@ -1,35 +1,42 @@
-import lz4.frame,zstd
-import logging
-import grpc,threading,pathlib
+#import lz4.frame,zstd
+import logging,grpc
+import threading,pathlib
 from concurrent import futures
-import data_check_pb2
-import data_check_pb2_grpc
-import storge_cdc,local_storage_scan,hashlib
+from src.common.grpc import data_check_pb2_grpc,data_check_pb2
+from src.server import storge_cdc,local_storage_scan
+from src.common.dataclass import transform_data_class
+import hashlib
 import socketserver
 import multiprocessing
-import transform_data_class
-import pickle
+#from internal.common.dataclass import  transform_data_class
+import pickle,zstd
 #logging.basicConfig(filename='server.log', level=logging.INFO)
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
 logging.basicConfig(filename='logs/server.log',filemode="w",level=logging.DEBUG, format=log_formater)
 
+
+from configparser import ConfigParser
+cfg = ConfigParser()
+
+cfg.read('config/server.ini')
 #conf
-server_addr = '[::]:50051'
-server_port = 50052
-max_rpc_workers=30
+listen_addr = cfg.get('netowrk','listen_addr')
+control_server_port = cfg.getint('netowrk','control_server_port')
+control_server_addr = f"{listen_addr}:{control_server_port}"
+
+data_server_port = cfg.getint('netowrk','data_server_port')
+
+local_resource_dir = cfg.get('storage','local_resource_dir')
+recive_dst_path = cfg.get('storage','recive_dst_path')
+
+compress_type = cfg.get('compress','type')
 MAX_MESSAGE_LENGTH = 150 * 1024 * 1024
-""" rpc_options = [
- #   ('grpc.max_message_length', MAX_MESSAGE_LENGTH),
-    ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
-    ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH)
-] """
 rpc_options = [
     ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
     ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH)
-]
-local_resource_dir = "/opt/vmTransfer/dataTransfer/python/py-datasync/test/data/res"
-recive_dst_path = "/opt/vmTransfer/dataTransfer/python/py-datasync/test/data/dst"
-
+] 
+max_rpc_workers=30
+#MAX_MESSAGE_LENGTH = 150 * 1024 * 1024
 def check_and_update(path,pos,data,file_lock):
     file = pathlib.Path(path)
     if not file.exists():
@@ -90,13 +97,13 @@ class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
 
     def UploadFile(self, request, context):
         npath = gen_path(request.path)
-        decompressed_data = lz4.frame.decompress(request.data)
+#        decompressed_data = lz4.frame.decompress(request.data)
         logging.debug(f"upload request:{request.path,request.length}")
         try:
-            check_and_update(npath,request.start_pos,decompressed_data,file_lock)
+            check_and_update(npath,request.start_pos,request.data,file_lock)
             with info_lock:
                 if request.hash not in local_file_segment:
-                    local_file_segment[request.hash] = local_storage_scan.FileFragment(
+                    local_file_segment[request.hash] = transform_data_class.FileFragment(
                         path=npath,
                         start_pos=request.start_pos,
                         length = request.length,
@@ -137,10 +144,25 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             with upload_info_lock:
                 seg_upload_info = upload_info.get(id,None)
             if seg_upload_info:
-                decompressed_data = data
-                #decompressed_data = zstd.decompress(data[4:])
+                #decompressed_data
+                if compress_type == "zstd":
+                    decompressed_data = zstd.decompress(data)
+                else:
+                    decompressed_data = data
                 npath = gen_path(seg_upload_info.path)
                 check_and_update(npath,seg_upload_info.start_pos,decompressed_data,file_lock)
+                with info_lock:
+                    request = seg_upload_info
+                    if request.hash not in local_file_segment:
+                        local_file_segment[request.hash] = transform_data_class.FileFragment(
+                            path=npath,
+                            start_pos=request.start_pos,
+                            length = request.length,
+                            total_size = request.total_size,
+                            mtime = request.mtime,
+                            hash_type = request.hash_type,
+                            hash  = request.hash
+                        )
                 response = transform_data_class.upload_response(id=id,success=True)
                 response = pickle.dumps(response)
                 self.request.sendall(response)
@@ -184,8 +206,8 @@ if __name__ == '__main__':
 
     print(f"init local {len(local_file_segment)} file segments")
 #    grpc_server(server_addr)
-    grpc_thread  = threading.Thread(target=grpc_server,args=(server_addr,))
-    tcp_thread  = threading.Thread(target=tcp_server,args=(server_port,))
+    grpc_thread  = threading.Thread(target=grpc_server,args=(control_server_addr,))
+    tcp_thread  = threading.Thread(target=tcp_server,args=(data_server_port,))
     tcp_thread.start()
     grpc_thread.start()
 
