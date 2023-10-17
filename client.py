@@ -10,7 +10,7 @@ from multiprocessing.pool import ThreadPool
 from configparser import ConfigParser
 cfg = ConfigParser()
 
-cfg.read('config/client.ini')
+cfg.read('config/client.ini',encoding="UTF-8")
 fils_list = cfg.get('files','send_list').split(",")
 remote_addr = cfg.get('netowrk','server_add')
 control_server_port = cfg.getint('netowrk','control_server_port')
@@ -84,7 +84,7 @@ def segment_process(seg):
     else:
         if compress_type == "zstd":
             compressed_data = zstd.compress(seg.data,compress_level)
-            upload_request = gen_upload_request(check_result.upload_id,seg.data)
+            upload_request = gen_upload_request(check_result.upload_id,compressed_data)
         else:
             upload_request = gen_upload_request(check_result.upload_id,seg.data)
         before_upload = time.time()
@@ -105,7 +105,7 @@ def process_file(path):
 
 def get_file_list():
 #    pass
-    return ["/opt/vmTransfer/dataTransfer/python/py_datasync/test/data/test-img/1.iso"]
+    return fils_list
 
 
 

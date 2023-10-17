@@ -48,7 +48,10 @@ def check_and_update(path,pos,data,file_lock):
     return True
 
 def gen_path(raw_path):
-    raw_path = pathlib.Path(raw_path)
+    if ":" in raw_path:
+        raw_path = pathlib.PureWindowsPath(raw_path)
+    else:
+        raw_path = pathlib.PurePosixPath(raw_path)
     new_dir = pathlib.Path(recive_dst_path) / raw_path.parent.name
     dst_path = new_dir / raw_path.name
     pathlib.Path(new_dir).mkdir(parents=True,exist_ok=True)
@@ -67,7 +70,7 @@ class FileServiceServicer(data_check_pb2_grpc.FileServiceServicer):
             logging.info(f"resource found in local:{result}")
             logging.debug(f"dest path:{newpath}")
             try:
-                with open(result.path,"r") as f:
+                with open(result.path,"rb") as f:
                     f.seek(result.start_pos)
                     data = f.read(result.length)
                 if not data:
