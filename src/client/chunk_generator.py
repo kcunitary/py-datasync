@@ -36,6 +36,7 @@ class cdc_chunk(chunk_genator):
     def chunk_iter(self,path):
         results =  fastcdc.fastcdc(path,avg_size=self.chunk_size, fat=True, hf=self.hash)
         size = os.path.getsize(path)
+        mtime = int(os.path.getmtime(path))
         all = []
         for result in results:
             with self.lock:
@@ -44,7 +45,7 @@ class cdc_chunk(chunk_genator):
                     start_pos = result.offset,
                     length = result.length,
                     total_size=size,
-                    mtime = int(os.path.getmtime(path)),
+                    mtime = mtime,
                     hash = result.hash,
                     hash_type =  "md5",
                     data = result.data

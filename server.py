@@ -10,6 +10,8 @@ import socketserver
 import multiprocessing
 #from internal.common.dataclass import  transform_data_class
 import pickle,zstd
+from xmlrpc.server import SimpleXMLRPCServer
+from xmlrpc.server import SimpleXMLRPCRequestHandler
 #logging.basicConfig(filename='server.log', level=logging.INFO)
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
 logging.basicConfig(filename='logs/server.log',filemode="w",level=logging.DEBUG, format=log_formater)
@@ -126,8 +128,55 @@ def grpc_server(server_addr):
     server.start()
     server.wait_for_termination()
 
+def CheckFile(request):
+    global upload_id
+    logging.debug(f"uploadid:{upload_id}")
+    with info_lock:
+        result = local_file_segment.get(request.hash,None)
+    newpath = gen_path(request.path)
+    if result:
+        logging.info(f"resource found in local:{result}")
+        logging.debug(f"dest path:{newpath}")
+        try:
+            with open(result.path,"rb") as f:
+                f.seek(result.start_pos)
+                data = f.read(result.length)
+            if not data:
+                raise Exception("data empyt")
+            read_data_hash = hashlib.md5(data).hexdigest()
+            if read_data_hash != request.hash:
+                raise Exception(f"data changed:{read_data_hash}")
+            check_and_update(newpath,request.start_pos,data,file_lock)
+            return {"exist":True,"upload_id":0}
+        except Exception as err:
+            logging.error(f"local resoure err:{err}",exc_info=True)
+            with upload_id_lock:
+                with upload_info_lock:
+                    upload_id = upload_id + 1 
+                    now_upload_id = upload_id
+                    upload_info[upload_id] = request
+            return {"exist":False,"upload_id":now_upload_id}
+    else:
+        with upload_id_lock:
+            with upload_info_lock:
+                upload_id = upload_id + 1 
+                now_upload_id = upload_id
+                upload_info[upload_id] = request
+        return {"exist":False,"upload_id":now_upload_id}
+    
+#class RequestHandler(SimpleXMLRPCRequestHandler):
+#    rpc_paths = ('/chunk_check',)
 
-class MyTCPHandler(socketserver.BaseRequestHandler):
+# Create server
+#with SimpleXMLRPCServer(('localhost', 8000),
+#                        requestHandler=RequestHandler) as server:
+#    server.register_introspection_functions()
+
+    # Register pow() function; this will use the value of
+    # pow.__name__ as the name, which is just 'pow'.
+#    server.register_function(CheckFile)
+
+class DataHanlder(socketserver.BaseRequestHandler):
     def handle(self):
         id  = 0
         data = b""
@@ -181,7 +230,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             except Exception as err:
                 logging.error(f"upload send error failed:{err}",exc_info=True)
 def tcp_server(server_port):
-    with socketserver.ForkingTCPServer(("0.0.0.0", server_port), MyTCPHandler) as server:
+    with socketserver.ThreadingTCPServer(("0.0.0.0", server_port), DataHanlder) as server:
         server.serve_forever()
 
 
@@ -216,3 +265,5 @@ if __name__ == '__main__':
 
     tcp_thread.join()
     grpc_thread.join()
+
+
