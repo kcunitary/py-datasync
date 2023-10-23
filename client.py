@@ -1,11 +1,9 @@
 import logging,multiprocessing,threading
-#from multiprocessing import pool
-import zstd
+import zstd,pathlib
 from  src.client.upload_client import grpc_tcp_client as upload_client
 from src.client.chunk_generator import cdc_chunk as chunk_generator
 import hashlib,os,time
 import src.common.dataclass.transform_data_class as transform_data_class
-from multiprocessing.pool import ThreadPool
 from src.common.unit import sizeof_fmt
 from configparser import ConfigParser
 cfg = ConfigParser()
@@ -26,34 +24,35 @@ data_port = data_server_port
 MAX_UPLOAD_FILES = 2
 MAX_UPLOAD_SEGMENGT = 4
 
+pathlib.Path("logs").mkdir(parents=True,exist_ok=True)
 
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
-logging.basicConfig(filename='logs/client.log',filemode="w",level=logging.DEBUG, format=log_formater)
 
+logging.basicConfig(filename='logs/client.log',filemode="w",level=logging.DEBUG, format=log_formater)
 
 
 import multiprocessing.pool
 
-class NoDaemonProcess(multiprocessing.Process):
-    @property
-    def daemon(self):
-        return False
-
-    @daemon.setter
-    def daemon(self, value):
-        pass
-
-
-class NoDaemonContext(type(multiprocessing.get_context())):
-    Process = NoDaemonProcess
-
-# We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
-# because the latter is only a wrapper function, not a proper class.
-class NestablePool(multiprocessing.pool.Pool):
-    def __init__(self, *args, **kwargs):
-        kwargs['context'] = NoDaemonContext()
-        super(NestablePool, self).__init__(*args, **kwargs)
-
+def printProgress(iteration, total, prefix='', suffix='', decimals=1, barLength=100):
+    """
+    Call in a loop to create a terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        barLength   - Optional  : character length of bar (Int)
+    """
+    import sys
+    formatStr = "{0:." + str(decimals) + "f}"
+    percent = formatStr.format(100 * (iteration / float(total)))
+    filledLength = int(round(barLength * iteration / float(total)))
+    bar = '#' * filledLength + '-' * (barLength - filledLength)
+    sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percent, '%', suffix)),
+    if iteration == total:
+        sys.stdout.write('\n')
+    sys.stdout.flush()
 
 def gen_check_request(seg):
     seg_dict = seg.__dict__
@@ -66,6 +65,7 @@ def gen_upload_request(upload_id,data):
     return transform_data_class.upload_request(id=upload_id,data=data)
 #    pass
 
+
 def segment_process(seg):
     split_time = time.time()
 #    logging.info(f"segment:{seg.path}-{seg.start_pos} start progress")
@@ -76,7 +76,7 @@ def segment_process(seg):
     logging.info(f"segment:{seg.path}-{seg.start_pos} check_result:{check_result} cost_time:{upload_after - split_time}")
     if check_result.exist:
         logging.debug(f"segment:{seg.path}-{seg.start_pos} skip")
-        return
+        after_upload = time.time()
     else:
         if compress_type == "zstd":
             compress_before = time.time()
@@ -90,8 +90,13 @@ def segment_process(seg):
         response = client.upload(upload_request)
         after_upload = time.time()
         logging.info(f"upload resonse:{response},cost_time:{after_upload - before_upload}")
+#    printProgress(seg.start_pos + seg.length)
+    printProgress(seg.start_pos + seg.length, seg.total_size, prefix=f'{seg.path}:', suffix='Complete', barLength=50)
     logging.info(f"seg final: size:{sizeof_fmt(seg.length)}  cost_time:{after_upload - split_time}  speed:{sizeof_fmt(seg.length/(after_upload - split_time))}/s")
 
+def segment_process_sem(seg,sem):
+    with sem:
+        segment_process(seg)
 
 def process_file(path):
     #split one file to segments
@@ -101,8 +106,16 @@ def process_file(path):
 
 #    seg_pool = multiprocessing.Pool(MAX_UPLOAD_SEGMENGT)
 #    seg_pool.map(segment_process,file_segments)
+#    sem = multiprocessing.Semaphore(4)
+    sem = multiprocessing.Semaphore(4)
+    jobs = []
     for f in file_segments:
-        segment_process(f)
+        p = multiprocessing.Process(target=segment_process_sem,args=(f,sem))
+        p.start()
+        jobs.append(p)
+#        segment_process(f)
+    for j in jobs:
+        j.join()
     file_size = os.path.getsize(path)
     cost = time.time() -before_file
     logging.debug(f"file:{path} size:{file_size} cost:{cost} speed:{sizeof_fmt(file_size/cost)} /s")
@@ -117,10 +130,14 @@ def get_file_list():
 def run():
     file_list = get_file_list()
     logging.debug(f"upload file list:{file_list}")
+    jobs = []
     for x in file_list:
-        process_file(x)
-#    file_pool = NestablePool(MAX_UPLOAD_FILES)
-#    file_pool.map(process_file,file_list)
+#        process_file(x)
+        p = multiprocessing.Process(target=process_file,args=(x,))
+        p.start()
+        jobs.append(p)
+    for j in jobs:
+        j.join()
     logging.debug(f"Done!")
 
 
