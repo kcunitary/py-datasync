@@ -73,6 +73,7 @@ def segment_process(seg):
     check_request = gen_check_request(seg)
     check_result = client.check(check_request)
     upload_after = time.time()
+    p = None
     logging.info(f"segment:{seg.path}-{seg.start_pos} check_result:{check_result} cost_time:{upload_after - split_time}")
     if check_result.exist:
         logging.debug(f"segment:{seg.path}-{seg.start_pos} skip")
@@ -87,13 +88,15 @@ def segment_process(seg):
         else:
             upload_request = gen_upload_request(check_result.upload_id,seg.data)
         before_upload = time.time()
-        response = client.upload(upload_request)
+        p = threading.Thread(target=client.upload,args=(upload_request,))
+#        response = client.upload(upload_request)
+        p.start()
         after_upload = time.time()
-        logging.info(f"upload resonse:{response},cost_time:{after_upload - before_upload}")
+#        logging.info(f"upload resonse:{response},cost_time:{after_upload - before_upload}")
 #    printProgress(seg.start_pos + seg.length)
-    printProgress(seg.start_pos + seg.length, seg.total_size, prefix=f'{seg.path}:', suffix='Complete', barLength=50)
+#    printProgress(seg.start_pos + seg.length, seg.total_size, prefix=f'{seg.path}:', suffix='Complete', barLength=50)
     logging.info(f"seg final: size:{sizeof_fmt(seg.length)}  cost_time:{after_upload - split_time}  speed:{sizeof_fmt(seg.length/(after_upload - split_time))}/s")
-
+    return p
 def segment_process_sem(seg,sem):
     with sem:
         segment_process(seg)
@@ -103,19 +106,13 @@ def process_file(path):
     chunk_generator_ins = chunk_generator(hf = hash_filter,chunk_size = chunk_size)
     file_segments = chunk_generator_ins.chunk_iter(path)
     before_file = time.time()
-
-#    seg_pool = multiprocessing.Pool(MAX_UPLOAD_SEGMENGT)
-#    seg_pool.map(segment_process,file_segments)
-#    sem = multiprocessing.Semaphore(4)
-    sem = multiprocessing.Semaphore(4)
-    jobs = []
+    thread_jobs = []
     for f in file_segments:
-        p = multiprocessing.Process(target=segment_process_sem,args=(f,sem))
-        p.start()
-        jobs.append(p)
-#        segment_process(f)
-    for j in jobs:
-        j.join()
+        p = segment_process(f)
+        thread_jobs.append(p)
+    for p in thread_jobs:
+        if p:
+            p.join()
     file_size = os.path.getsize(path)
     cost = time.time() -before_file
     logging.debug(f"file:{path} size:{file_size} cost:{cost} speed:{sizeof_fmt(file_size/cost)} /s")
@@ -133,7 +130,7 @@ def run():
     jobs = []
     for x in file_list:
 #        process_file(x)
-        p = multiprocessing.Process(target=process_file,args=(x,))
+        p = threading.Thread(target=process_file,args=(x,))
         p.start()
         jobs.append(p)
     for j in jobs:
