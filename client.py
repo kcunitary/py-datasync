@@ -88,18 +88,20 @@ def segment_process(seg):
         else:
             upload_request = gen_upload_request(check_result.upload_id,seg.data)
         before_upload = time.time()
-        p = threading.Thread(target=client.upload,args=(upload_request,))
-#        response = client.upload(upload_request)
-        p.start()
+#        p = threading.Thread(target=client.upload,args=(upload_request,))
+#        p.start()
+        response = client.upload(upload_request)
         after_upload = time.time()
-#        logging.info(f"upload resonse:{response},cost_time:{after_upload - before_upload}")
+        logging.info(f"upload resonse:{response},cost_time:{after_upload - before_upload}")
 #    printProgress(seg.start_pos + seg.length)
-#    printProgress(seg.start_pos + seg.length, seg.total_size, prefix=f'{seg.path}:', suffix='Complete', barLength=50)
+    printProgress(seg.start_pos + seg.length, seg.total_size, prefix=f'{seg.path}:', suffix='Complete', barLength=50)
     logging.info(f"seg final: size:{sizeof_fmt(seg.length)}  cost_time:{after_upload - split_time}  speed:{sizeof_fmt(seg.length/(after_upload - split_time))}/s")
     return p
 def segment_process_sem(seg,sem):
     with sem:
-        segment_process(seg)
+        p = threading.Thread(target=segment_process,args=(seg,))
+        p.start()
+    return p
 
 def process_file(path):
     #split one file to segments
@@ -107,14 +109,15 @@ def process_file(path):
     file_segments = chunk_generator_ins.chunk_iter(path)
     before_file = time.time()
     thread_jobs = []
+    sem = threading.Semaphore(3)
     for f in file_segments:
-        p = segment_process(f)
+        p = segment_process_sem(f,sem)
         thread_jobs.append(p)
     for p in thread_jobs:
         if p:
             p.join()
     file_size = os.path.getsize(path)
-    cost = time.time() -before_file
+    cost = time.time() - before_file
     logging.debug(f"file:{path} size:{file_size} cost:{cost} speed:{sizeof_fmt(file_size/cost)} /s")
     return
 
