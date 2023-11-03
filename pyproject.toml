@@ -6,12 +6,13 @@ authors = ["kcunitary <admin@kcunitary.pw>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.7"
+python = ">=3.8,<3.13"
 fastcdc = "^1.5.0"
 grpcio = "^1.59.0"
 grpcio-tools = "^1.59.0"
 zstd = "^1.5.5.1"
 pyinstaller = "^6.1.0"
+lz4 = "^4.3.2"
 
 
 [build-system]

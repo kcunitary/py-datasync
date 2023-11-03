@@ -9,14 +9,14 @@ import hashlib
 import socketserver
 import multiprocessing
 #from internal.common.dataclass import  transform_data_class
-import pickle,zstd
+import pickle,zstd,lz4
 #from xmlrpc.server import SimpleXMLRPCServer
 #from xmlrpc.server import SimpleXMLRPCRequestHandler
 #logging.basicConfig(filename='server.log', level=logging.INFO)
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
 
 pathlib.Path("logs").mkdir(parents=True,exist_ok=True)
-logging.basicConfig(filename='logs/server.log',filemode="w",level=logging.DEBUG, format=log_formater)
+logging.basicConfig(filename='server.log',filemode="w",level=logging.DEBUG, format=log_formater)
 
 from configparser import ConfigParser
 cfg = ConfigParser()
@@ -207,11 +207,12 @@ class DataHanlder(socketserver.BaseRequestHandler):
 
             seg_upload_info = upload_info.get(id,None)
             if seg_upload_info:
+                decompressed_data = data
                 #decompressed_data
                 if compress_type == "zstd":
                     decompressed_data = zstd.decompress(data)
-                else:
-                    decompressed_data = data
+                elif compress_type == "lz4":
+                    decompressed_data = lz4.frame.decompress(data)
                 npath = gen_path(seg_upload_info["path"])
                 check_and_update(npath,seg_upload_info["start_pos"],decompressed_data,open_file)
 

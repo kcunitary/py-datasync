@@ -1,11 +1,13 @@
-import logging,multiprocessing,threading
-import zstd,pathlib
+import logging,threading
+import pathlib
 from  src.client.upload_client import grpc_tcp_client as upload_client
 from src.client.chunk_generator import cdc_chunk as chunk_generator
 import hashlib,os,time
+import subprocess
 import src.common.dataclass.transform_data_class as transform_data_class
 from src.common.unit import sizeof_fmt
 from configparser import ConfigParser
+import click
 cfg = ConfigParser()
 
 cfg.read('config/client.ini',encoding="UTF-8")
@@ -28,7 +30,7 @@ pathlib.Path("logs").mkdir(parents=True,exist_ok=True)
 
 log_formater = '%(threadName)s - %(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
 
-logging.basicConfig(filename='logs/client.log',filemode="w",level=logging.DEBUG, format=log_formater)
+logging.basicConfig(filename='client.log',filemode="w",level=logging.DEBUG, format=log_formater)
 
 
 import multiprocessing.pool
@@ -68,7 +70,6 @@ def gen_upload_request(upload_id,data):
 
 def segment_process(seg):
     split_time = time.time()
-#    logging.info(f"segment:{seg.path}-{seg.start_pos} start progress")
     client = upload_client(server_addr,server_port,data_port)
     check_request = gen_check_request(seg)
     check_result = client.check(check_request)
@@ -79,17 +80,18 @@ def segment_process(seg):
         logging.debug(f"segment:{seg.path}-{seg.start_pos} skip")
         after_upload = time.time()
     else:
+        send_data = seg.data
+        compress_before = time.time()
         if compress_type == "zstd":
-            compress_before = time.time()
-            compressed_data = zstd.compress(seg.data,compress_level)
-            compress_after = time.time()
-            upload_request = gen_upload_request(check_result.upload_id,compressed_data)
-            logging.debug(f"segment:{seg.path}-{seg.start_pos} compress cost:{compress_after - compress_before}")
-        else:
-            upload_request = gen_upload_request(check_result.upload_id,seg.data)
+            import zstd
+            send_data = zstd.compress(send_data,compress_level)
+        elif compress_type == "lz4":
+            import lz4.frame
+            send_data = lz4.frame.compress(send_data,compression_level=compress_level)
+        compress_after = time.time()
+        upload_request = gen_upload_request(check_result.upload_id,send_data)
+        logging.debug(f"segment:{seg.path}-{seg.start_pos} compress cost:{compress_after - compress_before}")
         before_upload = time.time()
-#        p = threading.Thread(target=client.upload,args=(upload_request,))
-#        p.start()
         response = client.upload(upload_request)
         after_upload = time.time()
         logging.info(f"upload resonse:{response},cost_time:{after_upload - before_upload}")
@@ -121,14 +123,22 @@ def process_file(path):
     logging.debug(f"file:{path} size:{file_size} cost:{cost} speed:{sizeof_fmt(file_size/cost)} /s")
     return
 
-def get_file_list():
-#    pass
-    return fils_list
+def get_file_list(path):
+    return [os.path.join(root, file) for root, dirs, files in os.walk(path) for file in files if file.endswith("vhdx")]
+def convert(path):
+    current_dir = os.getcwd() # 获取当前目录的路径
+    exe_file = os.path.join(current_dir, "qemu-img","qemu-img.exe") # 拼接exe程序的文件名
+    dst_path = path + ".raw"
+    subprocess.run([exe_file,"convert -f vhdx -O raw",path,dst_path]) # 执行exe程序
+    return dst_path
 
-
-
-def run():
-    file_list = get_file_list()
+@click.command()
+@click.argument("path", type=click.Path(exists=True, file_okay=True, dir_okay=True))
+@click.option(
+    "-c", "--convert", help="convert before transfer.", is_flag=True,
+)
+def run(path,convert):
+    file_list = get_file_list(path)
     logging.debug(f"upload file list:{file_list}")
     jobs = []
     for x in file_list:
